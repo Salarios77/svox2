@@ -280,6 +280,7 @@ def main():
         # (3) Rescale the scene using camera distances
         scale = 1.0 / np.median(np.linalg.norm(t + translate, axis=-1))
         scale *= 0.95
+        #scale *= 0.50 #EDITED - cam_scale_factor
         return transform, scale
 
     T, scale = get_transform(all_poses)

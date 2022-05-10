@@ -148,6 +148,7 @@ with torch.no_grad():
     n_images = dset.render_c2w.size(0) if args.render_path else dset.n_images
     img_eval_interval = max(n_images // args.n_eval, 1)
     avg_psnr = 0.0
+    psnr_list = []
     avg_ssim = 0.0
     avg_lpips = 0.0
     n_images_gen = 0
@@ -199,6 +200,7 @@ with torch.no_grad():
             mse_num : float = mse.mean().item()
             psnr = -10.0 * math.log10(mse_num)
             avg_psnr += psnr
+            psnr_list.append(psnr)
             if not args.timing:
                 ssim = compute_ssim(im_gt, im).item()
                 avg_ssim += ssim
@@ -222,6 +224,10 @@ with torch.no_grad():
                 frames.append(im)
         im = None
         n_images_gen += 1
+
+    import numpy as np
+    print('8 images with lowest psnr:', np.argpartition(np.array(psnr_list), 8)[:8])
+
     if want_metrics:
         print('AVERAGES')
 
