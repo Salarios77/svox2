@@ -1,11 +1,16 @@
 import torch
 import argparse
-from util.dataset import datasets
+#from util.dataset import datasets
+from .dataset import datasets
 import json
 
 
-def define_common_args(parser : argparse.ArgumentParser):
-    parser.add_argument('data_dir', type=str)
+def define_common_args(parser : argparse.ArgumentParser, data_req=True):
+    print(data_req)
+    if data_req:
+        parser.add_argument('data_dir', type=str)
+    else:
+        parser.add_argument('--data_dir', type=str)
 
     parser.add_argument('--config', '-c',
                          type=str,

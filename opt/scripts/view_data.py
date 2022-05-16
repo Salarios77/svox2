@@ -281,6 +281,8 @@ def main():
         scale = 1.0 / np.median(np.linalg.norm(t + translate, axis=-1))
         scale *= 0.95
         #scale *= 0.50 #EDITED - cam_scale_factor
+        #scale *= 0.60 #EDITED - cam_scale_factor
+        print('scale:', scale)
         return transform, scale
 
     T, scale = get_transform(all_poses)
@@ -288,6 +290,11 @@ def main():
 
     R = all_poses[:, :3, :3]
     t = all_poses[:, :3, 3] * scale
+
+    print('t mean', np.mean(t,axis=0))
+    print('t var', np.var(t,axis=0))
+    print('t min', np.min(t,axis=0))
+    print('t max', np.max(t,axis=0))
 
     intrins = np.loadtxt(intrin_path)
     focal = (intrins[0, 0] + intrins[1, 1]) * 0.5

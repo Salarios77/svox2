@@ -178,6 +178,14 @@ with torch.no_grad():
         w = dset_w if args.crop == 1.0 else int(dset_w * args.crop)
         h = dset_h if args.crop == 1.0 else int(dset_h * args.crop)
 
+        print('info:')
+        print(dset_h, dset_w)
+        print(dset.intrins.get('fx', img_id))
+        print(dset.intrins.get('fy', img_id))
+        print(dset.intrins.get('cx', img_id))
+        print(dset.intrins.get('cy', img_id))
+        print()
+
         cam = svox2.Camera(c2ws[img_id],
                            dset.intrins.get('fx', img_id),
                            dset.intrins.get('fy', img_id),
