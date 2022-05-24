@@ -3,7 +3,7 @@
     "n_iters": 102400,
     "background_nlayers": 64,
     "background_reso": 1024,
-    "cam_scale_factor": 0.5,
+    "cam_scale_factor": 0.3,
     "upsamp_every": 25600,
     "lr_sigma": 3e1,
     "lr_sh": 1e-2,

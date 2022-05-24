@@ -161,6 +161,9 @@ class NSVFDataset(DatasetBase):
             self.c2w_f64 = torch.from_numpy(T) @ self.c2w_f64
             scene_scale = cam_scale_factor * sscale
 
+            self.transform_T = T
+            self.transform_scale = scene_scale
+
             #  center = np.mean(norm_poses[:, :3, 3], axis=0)
             #  radius = np.median(np.linalg.norm(norm_poses[:, :3, 3] - center, axis=-1))
             #  self.c2w_f64[:, :3, 3] -= center

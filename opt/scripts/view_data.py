@@ -236,6 +236,9 @@ def main():
         all_poses.append(pose)
     all_poses = np.stack(all_poses)
 
+    # INSERTED
+    #scale_carla = 18
+
     def get_transform(c2w):
         t = c2w[:, :3, 3]
         R = c2w[:, :3, :3]
@@ -262,6 +265,24 @@ def main():
                                 [0.0, 1.0, 0.0],
                                 [0.0, 0.0, 1.0]])
 
+        # INSERTED #####
+        # rotate -90 deg about x (matrix with 90)
+        '''
+        R_align2 = np.array([[1.0, 0.0, 0.0],
+                             [0.0, 0.0, -1.0],
+                             [0.0, 1.0, 0.0]])
+        R_align = R_align2 @ R_align
+
+        # rotate theta about z
+        theta = (90+73.5)*(np.pi/180)
+        R_align3 = np.array([[np.cos(theta), -np.sin(theta), 0.0],
+                             [np.sin(theta), np.cos(theta), 0.0],
+                             [0.0, 0.0, 1.0]])
+        R_align = R_align3 @ R_align
+        '''
+
+        #####
+
         R = (R_align @ R)
         fwds = np.sum(R * np.array([0, 0.0, 1.0]), axis=-1)
         t = (R_align @ t[..., None])[..., 0]
@@ -273,15 +294,20 @@ def main():
         # Median for more robustness
         translate = -np.median(dvec, axis=0)
 
+        # INSERTED
+        #translate += np.array([91,137,0])/scale_carla
+        #####
+
         transform = np.eye(4)
         transform[:3, 3] = translate
         transform[:3, :3] = R_align
 
         # (3) Rescale the scene using camera distances
         scale = 1.0 / np.median(np.linalg.norm(t + translate, axis=-1))
-        scale *= 0.95
-        #scale *= 0.50 #EDITED - cam_scale_factor
+        #scale *= 0.95
+        scale *= 0.3 #EDITED - cam_scale_factor
         #scale *= 0.60 #EDITED - cam_scale_factor
+        #scale *= scale_carla
         print('scale:', scale)
         return transform, scale
 
@@ -376,13 +402,37 @@ def main():
         point_cloud *= scale
         scene.add_points("point_cloud", point_cloud, color=[0.0, 0.0, 0.0], unlit=True)
 
+        # INSERTED
+        if False:
+            import matplotlib.pyplot as plt
+            f = plt.figure(figsize=(12,6))
+            #index = np.random.choice(point_cloud.shape[0], point_cloud.shape[0]//4, replace=False)  
+            index = np.where(np.logical_and(0.140*scale_carla < point_cloud[:,2], point_cloud[:,2] < 0.145*scale_carla))
+            plt.scatter(point_cloud[index,0], point_cloud[index,1])
+            plt.axhline(0)
+            plt.axvline(0)
+            plt.xlabel('x')
+            plt.ylabel('y')
+            plt.xlim(-1*scale_carla,1*scale_carla)
+            plt.ylim(-1*scale_carla,1*scale_carla)
+            plt.gca().invert_yaxis()
+            plot_name = 'pointcloud_plot.png'
+            f.savefig(plot_name, bbox_inches ='tight')
+            print('Saved pose plot to', plot_name)
+
+
 
     out_dir = path.join(args.data_dir, "visual")
     scene.add_axes(length=1.0, visible=False)
     scene.add_sphere("Unit Sphere", visible=False)
     scene.add_cube("Unit Cube", scale=2, visible=False)
+    #scene.add_line('line1',np.array([0,0,0.14]),np.array([0,0,0.145]))
+    #scene.add_line('line2',np.array([0,0,0.14]),np.array([0.5,0,0.14]))
+    #scene.add_line('line3',np.array([0,0,0.145]),np.array([0.5,0,0.145]))
     print('WRITING', out_dir)
-    scene.display(out_dir, world_up=world_up, cam_origin=origin, cam_center=center, cam_forward=vforward)
+    scene.display(out_dir, world_up=world_up, cam_origin=origin,
+            cam_center=center, cam_forward=vforward, port=8890)
+
 
 
 
