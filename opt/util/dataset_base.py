@@ -61,13 +61,17 @@ class DatasetBase:
             gt = gt.reshape(self.n_images, -1, 3)
         else:
             gt = self.gt.reshape(self.n_images, -1, 3)
+
+        depth = self.depth.reshape(self.n_images, -1)
+
         origins = self.c2w[:, None, :3, 3].expand(-1, self.h * self.w, -1).contiguous()
         if self.split == "train":
             origins = origins.view(-1, 3)
             dirs = dirs.view(-1, 3)
             gt = gt.reshape(-1, 3)
+            depth = depth.reshape(-1)
 
-        self.rays_init = Rays(origins=origins, dirs=dirs, gt=gt)
+        self.rays_init = Rays(origins=origins, dirs=dirs, gt=gt, depth_gt = depth)
         self.rays = self.rays_init
 
     def get_image_size(self, i : int):

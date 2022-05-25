@@ -60,6 +60,7 @@ class NSVFDataset(DatasetBase):
         self.epoch_size = epoch_size
         all_c2w = []
         all_gt = []
+        all_depth = []
 
         split_name = split if split != "test_train" else "train"
 
@@ -81,6 +82,7 @@ class NSVFDataset(DatasetBase):
 
         img_dir_name = look_for_dir(["images", "image", "rgb"])
         pose_dir_name = look_for_dir(["poses", "pose"])
+        depth_dir_name = look_for_dir(["depth"])
         #  intrin_dir_name = look_for_dir(["intrin"], required=False)
         img_files = sorted(os.listdir(path.join(root, img_dir_name)), key=sort_key)
 
@@ -119,6 +121,10 @@ class NSVFDataset(DatasetBase):
             pose_fname = path.splitext(img_fname)[0] + ".txt"
             pose_path = path.join(root, pose_dir_name, pose_fname)
             #  intrin_path = path.join(root, intrin_dir_name, pose_fname)
+            depth_path = path.join(root, depth_dir_name, img_fname)
+            depth = imageio.imread(depth_path)
+            normalized = (depth[:, :, 0] + depth[:, :, 1] * 256 + depth[:, :, 2] * 256 * 256) / (256 * 256 * 256 - 1)
+            depth = 1000 * normalized
 
             cam_mtx = np.loadtxt(pose_path).reshape(-1, 4)
             if len(cam_mtx) == 3:
@@ -129,8 +135,12 @@ class NSVFDataset(DatasetBase):
             rsz_h, rsz_w = [round(hw * scale) for hw in full_size]
             if dynamic_resize:
                 image = cv2.resize(image, (rsz_w, rsz_h), interpolation=cv2.INTER_AREA)
+                depth = cv2.resize(depth, (rsz_w, rsz_h), interpolation=cv2.INTER_AREA)
+
+
 
             all_gt.append(torch.from_numpy(image))
+            all_depth.append(torch.from_numpy(depth))
 
 
         self.c2w_f64 = torch.stack(all_c2w)
@@ -175,6 +185,7 @@ class NSVFDataset(DatasetBase):
         self.c2w = self.c2w_f64.float()
 
         self.gt = torch.stack(all_gt).double() / 255.0
+        self.depth = torch.stack(all_depth)
         if self.gt.size(-1) == 4:
             if white_bkgd:
                 # Apply alpha channel
@@ -211,6 +222,7 @@ class NSVFDataset(DatasetBase):
 
         self.intrins_full : Intrin = Intrin(fx, fy, cx, cy)
         print(' intrinsics (loaded reso)', self.intrins_full)
+        print(self.depth.shape, factor)
 
         self.scene_scale = scene_scale
         if self.split == "train":

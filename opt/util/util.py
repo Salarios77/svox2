@@ -16,18 +16,21 @@ class Rays:
     origins: Union[torch.Tensor, List[torch.Tensor]]
     dirs: Union[torch.Tensor, List[torch.Tensor]]
     gt: Union[torch.Tensor, List[torch.Tensor]]
+    depth_gt: Union[torch.Tensor, List[torch.Tensor]]
 
     def to(self, *args, **kwargs):
         origins = self.origins.to(*args, **kwargs)
         dirs = self.dirs.to(*args, **kwargs)
         gt = self.gt.to(*args, **kwargs)
-        return Rays(origins, dirs, gt)
+        depth_gt = self.depth_gt.to(*args, **kwargs)
+        return Rays(origins, dirs, gt, depth_gt)
 
     def __getitem__(self, key):
         origins = self.origins[key]
         dirs = self.dirs[key]
+        depth_gt = self.depth_gt[key]
         gt = self.gt[key]
-        return Rays(origins, dirs, gt)
+        return Rays(origins, dirs, gt, depth_gt)
 
     def __len__(self):
         return self.origins.size(0)
