@@ -470,7 +470,7 @@ while True:
         # NOTE: we do an eval sanity check, if not in tune_mode
         eval_step()
         gc.collect()
-
+    
     def train_step():
         print('Train step')
         pbar = tqdm(enumerate(range(0, epoch_size, args.batch_size)), total=batches_per_epoch)
@@ -493,23 +493,39 @@ while True:
             batch_origins = dset.rays.origins[batch_begin: batch_end]
             batch_dirs = dset.rays.dirs[batch_begin: batch_end]
             rgb_gt = dset.rays.gt[batch_begin: batch_end]
+            depth_gt = dset.rays.depth_gt[batch_begin: batch_end]
             rays = svox2.Rays(batch_origins, batch_dirs)
+            
+    
+            def zero_grad(p):
+                if p.grad is not None:
+                    p.grad.zero_()
+
+            zero_grad(grid.sh_data)
+            zero_grad(grid.density_data)
+            zero_grad(grid.background_data)
 
             #  with Timing("volrend_fused"):
             rgb_pred = grid.volume_render_fused(rays, rgb_gt,
-                    beta_loss=args.lambda_beta,
-                    sparsity_loss=args.lambda_sparsity,
-                    randomize=args.enable_random)
+                          randomize=args.enable_random)
+
+            #rgb_pred = grid.volume_render(rays, randomize=args.enable_random)
+            depth_pred = grid.volume_render_depth(rays)
 
             #  with Timing("loss_comp"):
             mse = F.mse_loss(rgb_gt, rgb_pred)
+            depth_mse = F.mse_loss(depth_gt, depth_pred)
+
+            depth_mse.backward()
 
             # Stats
             mse_num : float = mse.detach().item()
+            depth_mse_num  = depth_mse.detach().item()
             psnr = -10.0 * math.log10(mse_num)
             stats['mse'] += mse_num
             stats['psnr'] += psnr
             stats['invsqr_mse'] += 1.0 / mse_num ** 2
+            stats['depth_mse'] = depth_mse_num
 
             if (iter_id + 1) % args.print_every == 0:
                 # Print averaged stats
@@ -576,6 +592,8 @@ while True:
             if args.lambda_l2_sh > 0.0:
                 grid.inplace_l2_color_grad(grid.sh_data.grad,
                         scaling=args.lambda_l2_sh)
+
+            print(grid.background_data.shape)
             if grid.use_background and (args.lambda_tv_background_sigma > 0.0 or args.lambda_tv_background_color > 0.0):
                 grid.inplace_tv_background_grad(grid.background_data.grad,
                         scaling=args.lambda_tv_background_color,
@@ -588,6 +606,8 @@ while True:
                 loss_tv_basis.backward()
             #  print('nz density', torch.count_nonzero(grid.sparse_grad_indexer).item(),
             #        ' sh', torch.count_nonzero(grid.sparse_sh_grad_indexer).item())
+            print(grid.density_data.grad.norm())
+            print(grid.sh_data.grad.norm())
 
             # Manual SGD/rmsprop step
             if gstep_id >= args.lr_fg_begin_step:
