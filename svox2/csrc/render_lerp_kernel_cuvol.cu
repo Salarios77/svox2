@@ -131,6 +131,76 @@ __device__ __inline__ void trace_ray_expected_term_backward(
         float* __restrict__ log_transmit_out
         ) {
 
+    float accum = density_cache;
+    float log_transmit = 0.f;
+
+    if (ray.tmin > ray.tmax) {
+        if(log_transmit_out) *log_transmit_out = 0.f;
+        if(accum_out) *accum_out = 0.f;
+        return;
+    }
+
+    float t = ray.tmin;
+
+    while(t <= ray.tmax) {
+#pragma unroll 3
+        for (int j = 0; j < 3; ++j) {
+            ray.pos[j] = fmaf(t, ray.dir[j], ray.origin[j]);
+            ray.pos[j] = min(max(ray.pos[j], 0.f), grid.size[j] - 1.f);
+            ray.l[j] = min(static_cast<int32_t>(ray.pos[j]), grid.size[j] - 2);
+            ray.pos[j] -= static_cast<float>(ray.l[j]);
+        }
+
+        const float skip = compute_skip_dist(ray,
+                       grid.links, grid.stride_x,
+                       grid.size[2], 0);
+
+        if (skip >= opt.step_size) {
+            // For consistency, we skip the by step size
+            t += ceilf(skip / opt.step_size) * opt.step_size;
+            continue;
+        }
+
+        float sigma = trilerp_cuvol_one(
+                grid.links, grid.density_data,
+                grid.stride_x,
+                grid.size[2],
+                1,
+                ray.l, ray.pos,
+                0);
+        if (sigma > opt.sigma_thresh) {
+            const float pcnt = ray.world_step * sigma;
+            const float weight = _EXP(log_transmit) * (1.f - _EXP(-pcnt));
+            log_transmit -= pcnt;
+
+            float d = ray.world_step * (t / opt.step_size);
+
+            accum -= weight * d;
+            float curr_grad_sigma = grad_output * ray.world_step * (
+                    d * _EXP(log_transmit) - accum);
+
+
+            trilerp_backward_cuvol_one_density(
+                  grid.links,
+                  grads.grad_density_out,
+                  grads.mask_out,
+                  grid.stride_x,
+                  grid.size[2],
+                  ray.l, ray.pos, curr_grad_sigma);
+
+            if (_EXP(log_transmit) < opt.stop_thresh) {
+                break;
+            }
+        }
+
+
+        t += opt.step_size;
+    }
+
+
+    if(log_transmit_out) *log_transmit_out = log_transmit;
+    if(accum_out) *accum_out = accum;
+
 }
 __device__ __inline__ void trace_ray_expected_term(
         const PackedSparseGridSpec& __restrict__ grid,

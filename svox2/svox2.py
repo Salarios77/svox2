@@ -244,15 +244,16 @@ class _DepthRenderFunction(autograd.Function):
     @staticmethod
     def backward(ctx, grad_out):
         (density_cache,) = ctx.saved_tensors
-        grad_density_grid = torch.zeros_like(grid.density_data)
+        grad_density_grid = torch.zeros_like(ctx.grid.density_data)
         grad_holder = _C.GridOutputGrads()
         grad_holder.grad_density_out = grad_density_grid
+        ctx.rays.dirs = ctx.rays.dirs.contiguous()
         _C.volume_render_expected_term_backward(
             ctx.grid,
             ctx.rays,
             ctx.opt,
             grad_out.contiguous(),
-            denisty_cache,
+            density_cache,
             grad_holder)
 
         return grad_density_grid, None, None, None
@@ -308,7 +309,7 @@ class _VolumeRenderFunction(autograd.Function):
             color_cache,
             grad_holder
         )
-        ctx.grid = ctx.rays = ctx.opt = None
+       # ctx.grid = ctx.rays = ctx.opt = None
         if not ctx.needs_input_grad[0]:
             grad_density_grid = None
         if not ctx.needs_input_grad[1]:
