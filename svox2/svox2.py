@@ -222,6 +222,41 @@ class _SampleGridAutogradFunction(autograd.Function):
 
         return grad_density_grid, grad_sh_grid, None, None, None
 
+class _DepthRenderFunction(autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        data_density: torch.Tensor,
+       # data_background: torch.Tensor,
+        grid,
+        rays,
+        opt):
+        depth = _C.volume_render_expected_term(
+                  grid,
+                  rays,
+                  opt)
+        ctx.save_for_backward(depth)
+        ctx.grid = grid
+        ctx.rays = rays
+        ctx.opt = opt
+        return depth
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        (density_cache,) = ctx.saved_tensors
+        grad_density_grid = torch.zeros_like(grid.density_data)
+        grad_holder = _C.GridOutputGrads()
+        grad_holder.grad_density_out = grad_density_grid
+        _C.volume_render_expected_term_backward(
+            ctx.grid,
+            ctx.rays,
+            ctx.opt,
+            grad_out.contiguous(),
+            denisty_cache,
+            grad_holder)
+
+        return grad_density_grid, None, None, None
+
 
 class _VolumeRenderFunction(autograd.Function):
     @staticmethod
@@ -1178,7 +1213,7 @@ class SparseGrid(nn.Module):
             all_rgb_out = torch.cat(all_rgb_out, dim=0)
             return all_rgb_out.view(camera.height, camera.width, -1)
 
-    def volume_render_depth(self, rays: Rays, sigma_thresh: Optional[float] = None):
+    def volume_render_depth(self, rays: Rays, sigma_thresh: Optional[float] = None, use_kernel: bool  = True):
         """
         Volumetric depth rendering for rays
 
@@ -1186,9 +1221,19 @@ class SparseGrid(nn.Module):
         :param sigma_thresh: Optional[float]. If None then finds the standard expected termination
                                               (NOTE: this is the absolute length along the ray, not the z-depth as usually expected);
                                               else then finds the first point where sigma strictly exceeds sigma_thresh
+        :param use_kernel: Use kernel to do depth calculation.
 
         :return: (N,)
         """
+
+        if use_kernel and self.links.is_cuda and _C:
+            return _DepthRenderFunction.apply(
+                self.density_data,
+                self._to_cpp(),
+                rays._to_cpp(),
+                self.opt._to_cpp(randomize=False),
+                )
+
         if sigma_thresh is None:
             return _C.volume_render_expected_term(
                     self._to_cpp(),

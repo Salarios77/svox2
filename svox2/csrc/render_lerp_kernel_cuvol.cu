@@ -119,6 +119,19 @@ __device__ __inline__ void trace_ray_cuvol(
     }
 }
 
+__device__ __inline__ void trace_ray_expected_term_backward(
+        const PackedSparseGridSpec& __restrict__ grid,
+        const float grad_output,
+        const float density_cache,
+        SingleRaySpec& __restrict__ ray,
+        const RenderOptions& __restrict__ opt,
+        float log_transmit_in,
+        PackedGridOutputGrads& __restrict__ grads,
+        float* __restrict__ accum_out,
+        float* __restrict__ log_transmit_out
+        ) {
+
+}
 __device__ __inline__ void trace_ray_expected_term(
         const PackedSparseGridSpec& __restrict__ grid,
         SingleRaySpec& __restrict__ ray,
@@ -689,6 +702,33 @@ __global__ void render_ray_image_kernel(
 }
 
 __launch_bounds__(TRACE_RAY_BKWD_CUDA_THREADS, MIN_BLOCKS_PER_SM)
+__global__ void render_ray_expected_term_backward_kernel(
+    PackedSparseGridSpec grid,
+    const float* __restrict__ grad_output,
+    const float* __restrict__ density_cache,
+    PackedRaysSpec rays,
+    RenderOptions opt,
+    const float* __restrict__ log_transmit_in,
+    PackedGridOutputGrads grads,
+    float* __restrict__ accum_out = nullptr,
+    float* __restrict__ log_transmit_out = nullptr
+) {
+    CUDA_GET_THREAD_ID(ray_id, rays.origins.size(0));
+    SingleRaySpec ray_spec(rays.origins[ray_id].data(), rays.dirs[ray_id].data());
+    ray_find_bounds(ray_spec, grid, opt, ray_id);
+    trace_ray_expected_term_backward(
+        grid,
+        grad_output[ray_id],
+        density_cache[ray_id],
+        ray_spec,
+        opt,
+        log_transmit_in == nullptr ? 0.f : log_transmit_in[ray_id],
+        grads,
+        accum_out == nullptr ? nullptr : accum_out + ray_id,
+        log_transmit_out == nullptr ? nullptr : log_transmit_out + ray_id);
+}
+
+__launch_bounds__(TRACE_RAY_BKWD_CUDA_THREADS, MIN_BLOCKS_PER_SM)
 __global__ void render_ray_backward_kernel(
     PackedSparseGridSpec grid,
     const float* __restrict__ grad_output,
@@ -702,6 +742,7 @@ __global__ void render_ray_backward_kernel(
     PackedGridOutputGrads grads,
     float* __restrict__ accum_out = nullptr,
     float* __restrict__ log_transmit_out = nullptr) {
+
     CUDA_GET_THREAD_ID(tid, int(rays.origins.size(0)) * WARP_SIZE);
     const int ray_id = tid >> 5;
     const int ray_blk_id = threadIdx.x >> 5;
@@ -1006,6 +1047,39 @@ torch::Tensor volume_render_cuvol_image(SparseGridSpec& grid, CameraSpec& cam, R
     return results;
 }
 
+void volume_render_expected_term_backward(
+        SparseGridSpec& grid,
+        RaysSpec& rays,
+        RenderOptions& opt,
+        torch::Tensor grad_out,
+        torch::Tensor density_cache,
+        GridOutputGrads& grads) {
+
+    DEVICE_GUARD(grid.density_data);
+    grid.check();
+    rays.check();
+    grads.check();
+    const auto Q = rays.origins.size(0);
+
+    bool use_background = grid.background_links.defined() &&
+                          grid.background_links.size(0) > 0;
+    torch::Tensor log_transmit, accum;
+
+    const int blocks = CUDA_N_BLOCKS_NEEDED(Q, TRACE_RAY_BKWD_CUDA_THREADS);
+    device::render_ray_expected_term_backward_kernel<<<blocks,
+        TRACE_RAY_BKWD_CUDA_THREADS>>>(
+                grid,
+                grad_out.data_ptr<float>(),
+                density_cache.data_ptr<float>(),
+                rays, opt,
+                nullptr,
+                // Output
+                grads,
+                nullptr, nullptr);
+            //    use_background ? accum.data_ptr<float>() : nullptr,
+            //    use_background ? log_transmit.data_ptr<float>() : nullptr);
+
+}
 void volume_render_cuvol_backward(
         SparseGridSpec& grid,
         RaysSpec& rays,

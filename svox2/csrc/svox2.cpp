@@ -28,6 +28,11 @@ torch::Tensor volume_render_expected_term(SparseGridSpec &, RaysSpec &,
 torch::Tensor volume_render_sigma_thresh(SparseGridSpec &, RaysSpec &,
                                          RenderOptions &, float);
 
+
+void volume_render_expected_term_backward(SparseGridSpec &, RaysSpec &,
+                                         RenderOptions &, Tensor, Tensor, GridOutputGrads&);
+
+
 // ** NV rendering formula (trilerp)
 Tensor volume_render_nvol(SparseGridSpec &, RaysSpec &, RenderOptions &);
 void volume_render_nvol_backward(SparseGridSpec &, RaysSpec &, RenderOptions &,
@@ -81,6 +86,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   _REG_FUNC(volume_render_cuvol_fused);
   _REG_FUNC(volume_render_expected_term);
   _REG_FUNC(volume_render_sigma_thresh);
+  _REG_FUNC(volume_render_expected_term_backward);
 
   _REG_FUNC(volume_render_nvol);
   _REG_FUNC(volume_render_nvol_backward);
