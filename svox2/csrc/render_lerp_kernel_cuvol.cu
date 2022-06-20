@@ -119,20 +119,21 @@ __device__ __inline__ void trace_ray_cuvol(
     }
 }
 
+template <typename scalar_t>
 __device__ __inline__ void trace_ray_expected_term_backward(
-        const PackedSparseGridSpec& __restrict__ grid,
-        const float grad_output,
-        const float density_cache,
-        SingleRaySpec& __restrict__ ray,
+        const PackedSparseGridSpec_t<scalar_t>& __restrict__ grid,
+        const scalar_t grad_output,
+        const scalar_t density_cache,
+        SingleRaySpec_t<scalar_t>& __restrict__ ray,
         const RenderOptions& __restrict__ opt,
-        float log_transmit_in,
-        PackedGridOutputGrads& __restrict__ grads,
-        float* __restrict__ accum_out,
-        float* __restrict__ log_transmit_out
+        scalar_t log_transmit_in,
+        PackedGridOutputGrads_t<scalar_t>& __restrict__ grads,
+        scalar_t* __restrict__ accum_out,
+        scalar_t* __restrict__ log_transmit_out
         ) {
 
-    float accum = density_cache;
-    float log_transmit = 0.f;
+    scalar_t accum = density_cache;
+    scalar_t log_transmit = 0.f;
 
     if (ray.tmin > ray.tmax) {
         if(log_transmit_out) *log_transmit_out = 0.f;
@@ -140,7 +141,7 @@ __device__ __inline__ void trace_ray_expected_term_backward(
         return;
     }
 
-    float t = ray.tmin;
+    scalar_t t = ray.tmin;
 
     while(t <= ray.tmax) {
 #pragma unroll 3
@@ -148,10 +149,10 @@ __device__ __inline__ void trace_ray_expected_term_backward(
             ray.pos[j] = fmaf(t, ray.dir[j], ray.origin[j]);
             ray.pos[j] = min(max(ray.pos[j], 0.f), grid.size[j] - 1.f);
             ray.l[j] = min(static_cast<int32_t>(ray.pos[j]), grid.size[j] - 2);
-            ray.pos[j] -= static_cast<float>(ray.l[j]);
+            ray.pos[j] -= static_cast<scalar_t>(ray.l[j]);
         }
 
-        const float skip = compute_skip_dist(ray,
+        const scalar_t skip = compute_skip_dist(ray,
                        grid.links, grid.stride_x,
                        grid.size[2], 0);
 
@@ -161,7 +162,7 @@ __device__ __inline__ void trace_ray_expected_term_backward(
             continue;
         }
 
-        float sigma = trilerp_cuvol_one(
+        scalar_t sigma = trilerp_cuvol_one(
                 grid.links, grid.density_data,
                 grid.stride_x,
                 grid.size[2],
@@ -169,14 +170,14 @@ __device__ __inline__ void trace_ray_expected_term_backward(
                 ray.l, ray.pos,
                 0);
         if (sigma > opt.sigma_thresh) {
-            const float pcnt = ray.world_step * sigma;
-            const float weight = _EXP(log_transmit) * (1.f - _EXP(-pcnt));
+            const scalar_t pcnt = ray.world_step * sigma;
+            const scalar_t weight = _EXP(log_transmit) * (1.f - _EXP(-pcnt));
             log_transmit -= pcnt;
 
-            float d = ray.world_step * (t / opt.step_size);
+            scalar_t d = ray.world_step * (t / opt.step_size);
 
             accum -= weight * d;
-            float curr_grad_sigma = grad_output * ray.world_step * (
+            scalar_t curr_grad_sigma = grad_output * ray.world_step * (
                     d * _EXP(log_transmit) - accum);
 
 
@@ -202,20 +203,22 @@ __device__ __inline__ void trace_ray_expected_term_backward(
     if(accum_out) *accum_out = accum;
 
 }
+
+template <typename T>
 __device__ __inline__ void trace_ray_expected_term(
-        const PackedSparseGridSpec& __restrict__ grid,
-        SingleRaySpec& __restrict__ ray,
+        const PackedSparseGridSpec_t<T>& __restrict__ grid,
+        SingleRaySpec_t<T>& __restrict__ ray,
         const RenderOptions& __restrict__ opt,
-        float* __restrict__ out) {
+        T* __restrict__ out) {
     if (ray.tmin > ray.tmax) {
         *out = 0.f;
         return;
     }
 
-    float t = ray.tmin;
-    float outv = 0.f;
+    T t = ray.tmin;
+    T outv = 0.f;
 
-    float log_transmit = 0.f;
+    T log_transmit = 0.f;
     // printf("tmin %f, tmax %f \n", ray.tmin, ray.tmax);
 
     while (t <= ray.tmax) {
@@ -224,19 +227,19 @@ __device__ __inline__ void trace_ray_expected_term(
             ray.pos[j] = fmaf(t, ray.dir[j], ray.origin[j]);
             ray.pos[j] = min(max(ray.pos[j], 0.f), grid.size[j] - 1.f);
             ray.l[j] = min(static_cast<int32_t>(ray.pos[j]), grid.size[j] - 2);
-            ray.pos[j] -= static_cast<float>(ray.l[j]);
+            ray.pos[j] -= static_cast<T>(ray.l[j]);
         }
 
-        const float skip = compute_skip_dist(ray,
+        const T skip = compute_skip_dist(ray,
                        grid.links, grid.stride_x,
                        grid.size[2], 0);
 
         if (skip >= opt.step_size) {
             // For consistency, we skip the by step size
-            t += ceilf(skip / opt.step_size) * opt.step_size;
+            t += ceil(skip / opt.step_size) * opt.step_size;
             continue;
         }
-        float sigma = trilerp_cuvol_one(
+        T sigma = trilerp_cuvol_one(
                 grid.links, grid.density_data,
                 grid.stride_x,
                 grid.size[2],
@@ -244,8 +247,8 @@ __device__ __inline__ void trace_ray_expected_term(
                 ray.l, ray.pos,
                 0);
         if (sigma > opt.sigma_thresh) {
-            const float pcnt = ray.world_step * sigma;
-            const float weight = _EXP(log_transmit) * (1.f - _EXP(-pcnt));
+            const T pcnt = ray.world_step * sigma;
+            const T weight = _EXP(log_transmit) * (1.f - _EXP(-pcnt));
             log_transmit -= pcnt;
 
             outv += weight * (t / opt.step_size) * ray.world_step;
@@ -473,7 +476,7 @@ __device__ __inline__ void render_background_forward(
             float* __restrict__ out
         ) {
 
-    ConcentricSpheresIntersector csi(ray.origin, ray.dir);
+    ConcentricSpheresIntersector<> csi(ray.origin, ray.dir);
 
     const float inner_radius = fmaxf(_dist_ray_to_origin(ray.origin, ray.dir) + 1e-3f, 1.f);
     float t, invr_last = 1.f / inner_radius;
@@ -569,7 +572,7 @@ __device__ __inline__ void render_background_backward(
         ) {
     // printf("accum_init=%f\n", accum);
     // printf("log_transmit_init=%f\n", log_transmit);
-    ConcentricSpheresIntersector csi(ray.origin, ray.dir);
+    ConcentricSpheresIntersector<> csi(ray.origin, ray.dir);
 
     const int n_steps = int(grid.background_nlayers / opt.step_size) + 2;
 
@@ -771,32 +774,6 @@ __global__ void render_ray_image_kernel(
         log_transmit_out == nullptr ? nullptr : log_transmit_out + ray_id);
 }
 
-__launch_bounds__(TRACE_RAY_BKWD_CUDA_THREADS, MIN_BLOCKS_PER_SM)
-__global__ void render_ray_expected_term_backward_kernel(
-    PackedSparseGridSpec grid,
-    const float* __restrict__ grad_output,
-    const float* __restrict__ density_cache,
-    PackedRaysSpec rays,
-    RenderOptions opt,
-    const float* __restrict__ log_transmit_in,
-    PackedGridOutputGrads grads,
-    float* __restrict__ accum_out = nullptr,
-    float* __restrict__ log_transmit_out = nullptr
-) {
-    CUDA_GET_THREAD_ID(ray_id, rays.origins.size(0));
-    SingleRaySpec ray_spec(rays.origins[ray_id].data(), rays.dirs[ray_id].data());
-    ray_find_bounds(ray_spec, grid, opt, ray_id);
-    trace_ray_expected_term_backward(
-        grid,
-        grad_output[ray_id],
-        density_cache[ray_id],
-        ray_spec,
-        opt,
-        log_transmit_in == nullptr ? 0.f : log_transmit_in[ray_id],
-        grads,
-        accum_out == nullptr ? nullptr : accum_out + ray_id,
-        log_transmit_out == nullptr ? nullptr : log_transmit_out + ray_id);
-}
 
 __launch_bounds__(TRACE_RAY_BKWD_CUDA_THREADS, MIN_BLOCKS_PER_SM)
 __global__ void render_ray_backward_kernel(
@@ -969,24 +946,53 @@ __global__ void render_background_backward_kernel(
         grads);
 }
 
+template <typename T>
 __launch_bounds__(TRACE_RAY_CUDA_THREADS, MIN_BLOCKS_PER_SM)
 __global__ void render_ray_expected_term_kernel(
-        PackedSparseGridSpec grid,
-        PackedRaysSpec rays,
+        PackedSparseGridSpec_t<T> grid,
+        PackedRaysSpec_t<T> rays,
         RenderOptions opt,
-        float* __restrict__ out) {
+        T* __restrict__ out) {
         // const PackedSparseGridSpec& __restrict__ grid,
         // SingleRaySpec& __restrict__ ray,
         // const RenderOptions& __restrict__ opt,
         // float* __restrict__ out) {
     CUDA_GET_THREAD_ID(ray_id, rays.origins.size(0));
-    SingleRaySpec ray_spec(rays.origins[ray_id].data(), rays.dirs[ray_id].data());
+    SingleRaySpec_t<T> ray_spec(rays.origins[ray_id].data(), rays.dirs[ray_id].data());
     ray_find_bounds(ray_spec, grid, opt, ray_id);
     trace_ray_expected_term(
         grid,
         ray_spec,
         opt,
         out + ray_id);
+}
+
+template <typename scalar_t>
+__launch_bounds__(TRACE_RAY_BKWD_CUDA_THREADS, MIN_BLOCKS_PER_SM)
+__global__ void render_ray_expected_term_backward_kernel(
+    PackedSparseGridSpec_t<scalar_t> grid,
+    const scalar_t* __restrict__ grad_output,
+    const scalar_t* __restrict__ density_cache,
+    PackedRaysSpec_t<scalar_t> rays,
+    RenderOptions opt,
+    const scalar_t* __restrict__ log_transmit_in,
+    PackedGridOutputGrads_t<scalar_t> grads,
+    scalar_t* __restrict__ accum_out = nullptr,
+    scalar_t* __restrict__ log_transmit_out = nullptr)
+{
+    CUDA_GET_THREAD_ID(ray_id, rays.origins.size(0));
+    SingleRaySpec_t<scalar_t> ray_spec(rays.origins[ray_id].data(), rays.dirs[ray_id].data());
+    ray_find_bounds(ray_spec, grid, opt, ray_id);
+    trace_ray_expected_term_backward<scalar_t>(
+        grid,
+        grad_output[ray_id],
+        density_cache[ray_id],
+        ray_spec,
+        opt,
+        log_transmit_in == nullptr ? (scalar_t)0 : log_transmit_in[ray_id],
+        grads,
+        accum_out == nullptr ? nullptr : accum_out + ray_id,
+        log_transmit_out == nullptr ? nullptr : log_transmit_out + ray_id);
 }
 
 __launch_bounds__(TRACE_RAY_CUDA_THREADS, MIN_BLOCKS_PER_SM)
@@ -1117,39 +1123,6 @@ torch::Tensor volume_render_cuvol_image(SparseGridSpec& grid, CameraSpec& cam, R
     return results;
 }
 
-void volume_render_expected_term_backward(
-        SparseGridSpec& grid,
-        RaysSpec& rays,
-        RenderOptions& opt,
-        torch::Tensor grad_out,
-        torch::Tensor density_cache,
-        GridOutputGrads& grads) {
-
-    DEVICE_GUARD(grid.density_data);
-    grid.check();
-    rays.check();
-    grads.check();
-    const auto Q = rays.origins.size(0);
-
-    bool use_background = grid.background_links.defined() &&
-                          grid.background_links.size(0) > 0;
-    torch::Tensor log_transmit, accum;
-
-    const int blocks = CUDA_N_BLOCKS_NEEDED(Q, TRACE_RAY_BKWD_CUDA_THREADS);
-    device::render_ray_expected_term_backward_kernel<<<blocks,
-        TRACE_RAY_BKWD_CUDA_THREADS>>>(
-                grid,
-                grad_out.data_ptr<float>(),
-                density_cache.data_ptr<float>(),
-                rays, opt,
-                nullptr,
-                // Output
-                grads,
-                nullptr, nullptr);
-            //    use_background ? accum.data_ptr<float>() : nullptr,
-            //    use_background ? log_transmit.data_ptr<float>() : nullptr);
-
-}
 void volume_render_cuvol_backward(
         SparseGridSpec& grid,
         RaysSpec& rays,
@@ -1296,6 +1269,9 @@ void volume_render_cuvol_fused(
 
 torch::Tensor volume_render_expected_term(SparseGridSpec& grid,
         RaysSpec& rays, RenderOptions& opt) {
+    DEVICE_GUARD(grid.density_data);
+    grid.check();
+    rays.check();
     auto options =
         torch::TensorOptions()
         .dtype(rays.origins.dtype())
@@ -1305,13 +1281,57 @@ torch::Tensor volume_render_expected_term(SparseGridSpec& grid,
     torch::Tensor results = torch::empty({rays.origins.size(0)}, options);
     const auto Q = rays.origins.size(0);
     const int blocks = CUDA_N_BLOCKS_NEEDED(Q, TRACE_RAY_CUDA_THREADS);
-    device::render_ray_expected_term_kernel<<<blocks, TRACE_RAY_CUDA_THREADS>>>(
-            grid,
-            rays,
-            opt,
-            results.data_ptr<float>()
-        );
+
+    AT_DISPATCH_FLOATING_TYPES(rays.origins.type(), "render_ray_expected_term", ([&]{
+
+      device::PackedRaysSpec_t<scalar_t> rays_(rays);
+      scalar_t* results_ = results.data_ptr<scalar_t>();
+      device::PackedSparseGridSpec_t<scalar_t> grid_(grid);
+
+      device::render_ray_expected_term_kernel<<<blocks, TRACE_RAY_CUDA_THREADS>>>(
+              grid_, rays_, opt, results_);
+    }));
     return results;
+}
+
+void volume_render_expected_term_backward(
+        SparseGridSpec& grid,
+        RaysSpec& rays,
+        RenderOptions& opt,
+        torch::Tensor grad_out,
+        torch::Tensor density_cache,
+        GridOutputGrads& grads) {
+    DEVICE_GUARD(grid.density_data);
+    grid.check();
+    rays.check();
+    grads.check();
+    const auto Q = rays.origins.size(0);
+
+    bool use_background = grid.background_links.defined() &&
+                          grid.background_links.size(0) > 0;
+    torch::Tensor log_transmit, accum;
+
+
+
+    const int blocks = CUDA_N_BLOCKS_NEEDED(Q, TRACE_RAY_BKWD_CUDA_THREADS);
+    AT_DISPATCH_FLOATING_TYPES(rays.origins.type(), "render_ray_expected_term_backward", ([&]{
+      device::PackedRaysSpec_t<scalar_t> rays_(rays);
+      device::PackedSparseGridSpec_t<scalar_t> grid_(grid);
+      device::PackedGridOutputGrads_t<scalar_t> grads_(grads);
+
+      device::render_ray_expected_term_backward_kernel<scalar_t><<<blocks,
+        TRACE_RAY_BKWD_CUDA_THREADS>>>(
+                grid_,
+                grad_out.data_ptr<scalar_t>(),
+                density_cache.data_ptr<scalar_t>(),
+                rays_, opt,
+                nullptr,
+                // Output
+                grads_,
+                nullptr, nullptr);
+            //    use_background ? accum.data_ptr<scalar_t>() : nullptr,
+            //    use_background ? log_transmit.data_ptr<scalar_t>() : nullptr);
+    }));
 }
 
 torch::Tensor volume_render_sigma_thresh(SparseGridSpec& grid,

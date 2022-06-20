@@ -2194,6 +2194,9 @@ class SparseGrid(nn.Module):
             gspec._offset = self._offset * gsz - 0.5
             gspec._scaling = self._scaling * gsz
 
+        gspec._offset = gspec._offset.type_as(self.density_data).cpu()
+        gspec._scaling = gspec._scaling.type_as(self.density_data).cpu()
+
         gspec.basis_dim = self.basis_dim
         gspec.basis_type = self.basis_type
         if replace_basis_data:
