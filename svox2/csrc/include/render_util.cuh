@@ -90,6 +90,43 @@ __device__ __inline__ float trilerp_cuvol_one(
 #undef MAYBE_READ_LINK
 }
 
+// trilerp with links
+template<class data_type_t, class voxel_index_t>
+__device__ __inline__void trilerp_backward_cuvol_pos(
+        const int32_t* __restrict__ links,
+        const data_type_t* __restrict__ data,
+        int offx, int offy, size_t stride,
+        const voxel_index_t* __restrict__ l,
+        const float* __restrict__ pos,
+        const int idx,
+        float* grad_out) {
+    const int32_t* __restrict__ link_ptr = links + (offx * l[0] + offy * l[1] + l[2]);
+
+#define MAYBE_READ_LINK(u) ((link_ptr[u] >= 0) ? data[link_ptr[u] * stride + idx] : 0.f)
+    const float ix0y0 = lerp(MAYBE_READ_LINK(0), MAYBE_READ_LINK(1), pos[2]);
+    const float ix0y1 = lerp(MAYBE_READ_LINK(offy), MAYBE_READ_LINK(offy + 1), pos[2]);
+    const float ix0 = lerp(ix0y0, ix0y1, pos[1]); 
+    const float ix1y0 = lerp(MAYBE_READ_LINK(offx), MAYBE_READ_LINK(offx + 1), pos[2]);
+    const float ix1y1 = lerp(MAYBE_READ_LINK(offy + offx),
+                             MAYBE_READ_LINK(offy + offx + 1), pos[2]); 
+    const float ix1 = lerp(ix1y0, ix1y1, pos[1]);
+    // return lerp(ix0, ix1, pos[0]);
+    
+    const float ax = 1.f - pos[0], ay = 1.f - pos[1];
+    const float dc_dx = ix1 - ix0;
+    const float dc_dy = ax * (-ix0y0 + ix0y1) + pos[0] * (-ix1y0 + ix1y1);
+    const float dc_dz = ax * ay * (-MAYBE_READ_LINK(0) + MAYBE_READ_LINK(1)) 
+                      + ax * pos[1] * (-MAYBE_READ_LINK(offy) + MAYBE_READ_LINK(offy + 1))
+                      + pos[0] * ay * (-MAYBE_READ_LINK(offx) + MAYBE_READ_LINK(offx + 1)) 
+                      + pos[0] * pos[1] * (-MAYBE_READ_LINK(offy + offx) + MAYBE_READ_LINK(offy + offx + 1));
+
+    grad_out[0] = dc_dx;
+    grad_out[1] = dc_dy;
+    grad_out[2] = dc_dz;
+                      
+#undef MAYBE_READ_LINK
+}
+
 template<class data_type_t, class voxel_index_t>
 __device__ __inline__ void trilerp_backward_cuvol_one(
         const int32_t* __restrict__ links,

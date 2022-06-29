@@ -259,6 +259,58 @@ class _DepthRenderFunction(autograd.Function):
         return grad_density_grid, None, None, None
 
 
+class _RayRenderFunction(autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        data_density: torch.Tensor,
+        data_sh: torch.Tensor,
+        data_basis: torch.Tensor,
+        data_background: torch.Tensor,
+        grid,
+        rays,
+        opt):
+
+        color = _C.volume_render_cuvol(
+                    grid, 
+                    rays, 
+                    opt)
+        ctx.save_for_backward(color)
+
+        ctx.grid = grid
+        ctx.rays = rays
+        ctx.opt = opt
+        return color
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_out_origins,
+        grad_out_dirs
+    ):
+
+        (color_cache, ) = ctx.saved_tensors
+        grad_density_grid = torch.zeros_like(ctx.grid.density_data)
+        grad_sh_grid = torch.zeros_like(ctx.grid.sh_data.data)
+        grad_holder = _C.GridOutputGrads()
+        grad_holder.grad_density_out = grad_density_grid
+        grad_holder.grad_sh_out = grad_sh_grid
+        ctx.rays.dirs = ctx.rays.dirs.contiguous()
+        
+        _C._volume_render_ray_params_backward(
+            ctx.grid,
+            ctx.rays,
+            ctx.opt,
+            grad_out_origins.contiguous(),
+            grad_out_dirs.contiguous(),
+            color_cache,
+            grad_holder)
+
+
+        return grad_out_origins, grad_out_dirs, None, None, None
+
+
+
 class _VolumeRenderFunction(autograd.Function):
     @staticmethod
     def forward(

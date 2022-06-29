@@ -28,6 +28,8 @@ torch::Tensor volume_render_expected_term(SparseGridSpec &, RaysSpec &,
 torch::Tensor volume_render_sigma_thresh(SparseGridSpec &, RaysSpec &,
                                          RenderOptions &, float);
 
+void volume_render_ray_params_backward(SparseGridSpec &, RaysSpec &,
+                                          RenderOptions &, Tensor, Tensor, Tensor, GridOutputGrads&);
 
 void volume_render_expected_term_backward(SparseGridSpec &, RaysSpec &,
                                          RenderOptions &, Tensor, Tensor, GridOutputGrads&);
@@ -87,6 +89,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   _REG_FUNC(volume_render_expected_term);
   _REG_FUNC(volume_render_sigma_thresh);
   _REG_FUNC(volume_render_expected_term_backward);
+  _REG_FUNC(volume_render_ray_params_backward);
 
   _REG_FUNC(volume_render_nvol);
   _REG_FUNC(volume_render_nvol_backward);
