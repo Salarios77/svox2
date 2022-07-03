@@ -489,9 +489,24 @@ __device__ __inline__ void trace_ray_ray_params_backward(
                 dsigma_dx[j] = dsigma_dpos[j] * dpos_dx[j];
             }
 
+
+            float curr_grad_sh = lane_color * grad_common;
+
+            float dsh_ddir[9][3] = {};
+
+            const float vdir[3] = {ray.dir[0],
+                                   ray.dir[1],
+                                   ray.dir[2]};
+
+            calc_sphfunc_dir_backward(grid, 
+                                    lane_id, 
+                                    lane_colorgrp_id,
+                                    vdir, 
+                                    sphfunc_val, // output_saved
+                                    dsh_ddir);
+
             for (int j = 0; j < 3; ++j) {
-                // TODO: dcolor_ddir
-                curr_grad_dir[j] = curr_grad_color * dcolor_dx[j] * t + curr_grad_color * dcolor_ddir[j] 
+                curr_grad_dir[j] = curr_grad_color * dcolor_dx[j] * t + curr_grad_sh * dsh_ddir[lane_colorgrp_id][j] 
                                 + curr_grad_sigma * dsigma_dx[j] * t;
 
                 curr_grad_origin[j] = curr_grad_color * dcolor_dx[j] + curr_grad_sigma * dsigma_dx[j];
