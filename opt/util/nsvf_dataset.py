@@ -193,6 +193,7 @@ class NSVFDataset(DatasetBase):
             else:
                 self.gt = self.gt[..., :3]
         self.gt = self.gt.float()
+        self.depth = self.depth.float()
 
         assert full_size[0] > 0 and full_size[1] > 0, "Empty images"
         self.n_images, self.h_full, self.w_full, _ = self.gt.shape
