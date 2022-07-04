@@ -79,6 +79,15 @@ struct PackedGridOutputGrads {
     bool* __restrict__ mask_background_out;
 };
 
+struct PackedRayOutputGrads {
+    PackedRayOutputGrads(RayOutputGrads& grads) :
+        grad_origin_out(grads.grad_origin_out.defined() ? grads.grad_origin_out.data_ptr<float>() : nullptr),
+        grad_dir_out(grads.grad_dir_out.defined() ? grads.grad_dir_out.data_ptr<float>() : nullptr)
+        {}
+    float* __restrict__ grad_origin_out;
+    float* __restrict__ grad_dir_out;
+};
+
 struct PackedCameraSpec {
     PackedCameraSpec(CameraSpec& cam) :
         c2w(cam.c2w.packed_accessor32<float, 2, torch::RestrictPtrTraits>()),
@@ -128,6 +137,23 @@ struct SingleRaySpec {
     float pos[3];
     int32_t l[3];
     RandomEngine32 rng;
+};
+
+struct SingleRayGrad {
+    SingleRayGrad() = default;
+    __device__ SingleRayGrad(const float* __restrict__ grad_origin, const float* __restrict__ grad_dir)
+        : grad_origin{grad_origin[0], grad_origin[1], grad_origin[2]},
+          grad_dir{grad_dir[0], grad_dir[1], grad_dir[2]} {}
+    __device__ void set(const float* __restrict__ grad_origin, const float* __restrict__ grad_dir) {
+#pragma unroll 3
+        for (int i = 0; i < 3; ++i) {
+            this->grad_origin[i] = grad_origin[i];
+            this->grad_dir[i] = grad_dir[i];
+        }
+    }
+
+    float grad_origin[3];
+    float grad_dir[3];
 };
 
 }  // namespace device

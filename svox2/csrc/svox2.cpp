@@ -29,7 +29,7 @@ torch::Tensor volume_render_sigma_thresh(SparseGridSpec &, RaysSpec &,
                                          RenderOptions &, float);
 
 void volume_render_ray_params_backward(SparseGridSpec &, RaysSpec &,
-                                          RenderOptions &, Tensor, Tensor, Tensor, GridOutputGrads&);
+                                        RenderOptions &, Tensor, Tensor, GridOutputGrads&, RayOutputGrads&);
 
 void volume_render_expected_term_backward(SparseGridSpec &, RaysSpec &,
                                          RenderOptions &, Tensor, Tensor, GridOutputGrads&);

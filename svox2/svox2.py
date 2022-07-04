@@ -280,34 +280,32 @@ class _RayRenderFunction(autograd.Function):
         ctx.grid = grid
         ctx.rays = rays
         ctx.opt = opt
+        ctx.basis_data = data_basis
         return color
 
     @staticmethod
-    def backward(
-        ctx,
-        grad_out_origins,
-        grad_out_dirs
-    ):
-
+    def backward(ctx, grad_out):
         (color_cache, ) = ctx.saved_tensors
-        grad_density_grid = torch.zeros_like(ctx.grid.density_data)
-        grad_sh_grid = torch.zeros_like(ctx.grid.sh_data.data)
+
         grad_holder = _C.GridOutputGrads()
-        grad_holder.grad_density_out = grad_density_grid
-        grad_holder.grad_sh_out = grad_sh_grid
+        grad_origins = torch.zeros_like(ctx.rays.origins.data)
+        grad_dirs = torch.zero_like(ctx.rays.dirs.data)
+        ray_grad_holder = _C.RayOutputGrads()
+        ray_grad_holder.grad_origin_out = grad_origins
+        ray_grad_holder.grad_dir_out = grad_dirs
+
         ctx.rays.dirs = ctx.rays.dirs.contiguous()
         
         _C._volume_render_ray_params_backward(
             ctx.grid,
             ctx.rays,
             ctx.opt,
-            grad_out_origins.contiguous(),
-            grad_out_dirs.contiguous(),
+            grad_out.contiguous(),
             color_cache,
-            grad_holder)
+            grad_holder,
+            ray_grad_holder)
 
-
-        return grad_out_origins, grad_out_dirs, None, None, None
+        return grad_origins, grad_dirs, None, None, None
 
 
 
@@ -1266,6 +1264,30 @@ class SparseGrid(nn.Module):
             all_rgb_out = torch.cat(all_rgb_out, dim=0)
             return all_rgb_out.view(camera.height, camera.width, -1)
 
+    def volume_render_ray(self, rays: Rays, use_kernel: bool = True):
+        """
+        Volume rendering for rays
+
+        :param rays: Rays, (origins (N, 3), dirs (N, 3))
+        :param use_kernel: bool, if false uses pure PyTorch version even if on CUDA.
+        :return: (N, 3), predicted RGB
+        """
+
+        if use_kernel and self.links.is_cuda and _C:
+            assert rays.is_cuda
+            basis_data = self._eval_basis_mlp(rays.dirs) if self.basis_type == BASIS_TYPE_MLP \
+                                                         else None
+            return _RayRenderFunction.apply(
+                self.density_data,
+                self.sh_data,
+                basis_data,
+                self.background_data if self.use_background else None,
+                self._to_cpp(replace_basis_data=basis_data),
+                rays._to_cpp(),
+                self.opt._to_cpp()
+            )
+
+    
     def volume_render_depth(self, rays: Rays, sigma_thresh: Optional[float] = None, use_kernel: bool  = True):
         """
         Volumetric depth rendering for rays

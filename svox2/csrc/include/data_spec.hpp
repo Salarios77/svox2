@@ -81,6 +81,21 @@ struct GridOutputGrads {
   }
 };
 
+
+struct RayOutputGrads {
+  torch::Tensor grad_origin_out;
+  torch::Tensor grad_dir_out;
+
+  inline void check() {
+    if (grad_origin_out.defined()) {
+      CHECK_INPUT(grad_origin_out);
+    }
+    if (grad_dir_out.defined()) {
+      CHECK_INPUT(grad_dir_out);
+    }
+  }
+};
+
 struct CameraSpec {
   torch::Tensor c2w;
   float fx;
