@@ -493,7 +493,7 @@ while True:
             batch_origins = dset.rays.origins[batch_begin: batch_end]
             batch_dirs = dset.rays.dirs[batch_begin: batch_end]
             rgb_gt = dset.rays.gt[batch_begin: batch_end]
-            depth_gt = dset.rays.depth_gt[batch_begin: batch_end]
+            depth_gt = dset.rays.depth_gt[batch_begin: batch_end].float()
             rays = svox2.Rays(batch_origins, batch_dirs)
 
 

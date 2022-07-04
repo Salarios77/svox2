@@ -185,7 +185,7 @@ class NSVFDataset(DatasetBase):
         self.c2w = self.c2w_f64.float()
 
         self.gt = torch.stack(all_gt).double() / 255.0
-        self.depth = torch.stack(all_depth)
+        self.depth = torch.stack(all_depth) / 15. * scene_scale
         if self.gt.size(-1) == 4:
             if white_bkgd:
                 # Apply alpha channel
