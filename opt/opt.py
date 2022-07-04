@@ -506,20 +506,20 @@ while True:
             zero_grad(grid.background_data)
 
             #  with Timing("volrend_fused"):
-            rgb_pred = grid.volume_render_fused(rays, rgb_gt,
-                          randomize=args.enable_random)
+       #     rgb_pred = grid.volume_render_fused(rays, rgb_gt,
+       #                  randomize=args.enable_random)
 
             #rgb_pred = grid.volume_render(rays, randomize=args.enable_random)
             depth_pred = grid.volume_render_depth(rays)
 
             #  with Timing("loss_comp"):
-            mse = F.mse_loss(rgb_gt, rgb_pred)
-            depth_mse = F.mse_loss(depth_gt, depth_pred)
+      #      mse = F.mse_loss(rgb_gt, rgb_pred)
+            depth_mse = 100*F.mse_loss(depth_gt, depth_pred)
 
             depth_mse.backward()
 
             # Stats
-            mse_num : float = mse.detach().item()
+            mse_num : float = 0.00001 #mse.detach().item()
             depth_mse_num  = depth_mse.detach().item()
             psnr = -10.0 * math.log10(mse_num)
             stats['mse'] += mse_num
@@ -527,9 +527,11 @@ while True:
             stats['invsqr_mse'] += 1.0 / mse_num ** 2
             stats['depth_mse'] = depth_mse_num
 
+            depth_max_error = torch.max(torch.abs(depth_gt - depth_pred))
+
             if (iter_id + 1) % args.print_every == 0:
                 # Print averaged stats
-                pbar.set_description(f'epoch {epoch_id} psnr={psnr:.2f}')
+                pbar.set_description(f'epoch {epoch_id} psnr={psnr:.2f} depth_mse={depth_mse_num:.6f} depth_max_err={depth_max_error:.4f}')
                 for stat_name in stats:
                     stat_val = stats[stat_name] / args.print_every
                     summary_writer.add_scalar(stat_name, stat_val, global_step=gstep_id)
@@ -568,37 +570,37 @@ while True:
             #          sparsity_file.write(f"{gstep_id} {nz}\n")
 
             # Apply TV/Sparsity regularizers
-            if args.lambda_tv > 0.0:
-                #  with Timing("tv_inpl"):
-                grid.inplace_tv_grad(grid.density_data.grad,
-                        scaling=args.lambda_tv,
-                        sparse_frac=args.tv_sparsity,
-                        logalpha=args.tv_logalpha,
-                        ndc_coeffs=dset.ndc_coeffs,
-                        contiguous=args.tv_contiguous)
-            if args.lambda_tv_sh > 0.0:
-                #  with Timing("tv_color_inpl"):
-                grid.inplace_tv_color_grad(grid.sh_data.grad,
-                        scaling=args.lambda_tv_sh,
-                        sparse_frac=args.tv_sh_sparsity,
-                        ndc_coeffs=dset.ndc_coeffs,
-                        contiguous=args.tv_contiguous)
-            if args.lambda_tv_lumisphere > 0.0:
-                grid.inplace_tv_lumisphere_grad(grid.sh_data.grad,
-                        scaling=args.lambda_tv_lumisphere,
-                        dir_factor=args.tv_lumisphere_dir_factor,
-                        sparse_frac=args.tv_lumisphere_sparsity,
-                        ndc_coeffs=dset.ndc_coeffs)
-            if args.lambda_l2_sh > 0.0:
-                grid.inplace_l2_color_grad(grid.sh_data.grad,
-                        scaling=args.lambda_l2_sh)
+    #       if args.lambda_tv > 0.0:
+    #           #  with Timing("tv_inpl"):
+    #           grid.inplace_tv_grad(grid.density_data.grad,
+    #                   scaling=args.lambda_tv,
+    #                   sparse_frac=args.tv_sparsity,
+    #                   logalpha=args.tv_logalpha,
+    #                   ndc_coeffs=dset.ndc_coeffs,
+    #                   contiguous=args.tv_contiguous)
+    #       if args.lambda_tv_sh > 0.0:
+    #           #  with Timing("tv_color_inpl"):
+    #           grid.inplace_tv_color_grad(grid.sh_data.grad,
+    #                  scaling=args.lambda_tv_sh,
+    #                  sparse_frac=args.tv_sh_sparsity,
+    #                  ndc_coeffs=dset.ndc_coeffs,
+    #                  contiguous=args.tv_contiguous)
+    #       if args.lambda_tv_lumisphere > 0.0:
+    #           grid.inplace_tv_lumisphere_grad(grid.sh_data.grad,
+    #                   scaling=args.lambda_tv_lumisphere,
+    #                   dir_factor=args.tv_lumisphere_dir_factor,
+    #                   sparse_frac=args.tv_lumisphere_sparsity,
+    #                   ndc_coeffs=dset.ndc_coeffs)
+    #       if args.lambda_l2_sh > 0.0:
+    #           grid.inplace_l2_color_grad(grid.sh_data.grad,
+    #                   scaling=args.lambda_l2_sh)
 
-            if grid.use_background and (args.lambda_tv_background_sigma > 0.0 or args.lambda_tv_background_color > 0.0):
-                grid.inplace_tv_background_grad(grid.background_data.grad,
-                        scaling=args.lambda_tv_background_color,
-                        scaling_density=args.lambda_tv_background_sigma,
-                        sparse_frac=args.tv_background_sparsity,
-                        contiguous=args.tv_contiguous)
+    #       if grid.use_background and (args.lambda_tv_background_sigma > 0.0 or args.lambda_tv_background_color > 0.0):
+    #           grid.inplace_tv_background_grad(grid.background_data.grad,
+    #                   scaling=args.lambda_tv_background_color,
+    #                   scaling_density=args.lambda_tv_background_sigma,
+    #                   sparse_frac=args.tv_background_sparsity,
+    #                   contiguous=args.tv_contiguous)
             if args.lambda_tv_basis > 0.0:
                 tv_basis = grid.tv_basis()
                 loss_tv_basis = tv_basis * args.lambda_tv_basis
@@ -609,15 +611,15 @@ while True:
             # Manual SGD/rmsprop step
             if gstep_id >= args.lr_fg_begin_step:
                 grid.optim_density_step(lr_sigma, beta=args.rms_beta, optim=args.sigma_optim)
-                grid.optim_sh_step(lr_sh, beta=args.rms_beta, optim=args.sh_optim)
-            if grid.use_background:
-                grid.optim_background_step(lr_sigma_bg, lr_color_bg, beta=args.rms_beta, optim=args.bg_optim)
-            if gstep_id >= args.lr_basis_begin_step:
-                if grid.basis_type == svox2.BASIS_TYPE_3D_TEXTURE:
-                    grid.optim_basis_step(lr_basis, beta=args.rms_beta, optim=args.basis_optim)
-                elif grid.basis_type == svox2.BASIS_TYPE_MLP:
-                    optim_basis_mlp.step()
-                    optim_basis_mlp.zero_grad()
+       #         grid.optim_sh_step(lr_sh, beta=args.rms_beta, optim=args.sh_optim)
+       #    if grid.use_background:
+       #        grid.optim_background_step(lr_sigma_bg, lr_color_bg, beta=args.rms_beta, optim=args.bg_optim)
+       #    if gstep_id >= args.lr_basis_begin_step:
+       #        if grid.basis_type == svox2.BASIS_TYPE_3D_TEXTURE:
+       #            grid.optim_basis_step(lr_basis, beta=args.rms_beta, optim=args.basis_optim)
+       #        elif grid.basis_type == svox2.BASIS_TYPE_MLP:
+       #            optim_basis_mlp.step()
+       #            optim_basis_mlp.zero_grad()
 
     train_step()
     gc.collect()
