@@ -309,7 +309,7 @@ class _VolumeRenderFunction(autograd.Function):
             color_cache,
             grad_holder
         )
-       # ctx.grid = ctx.rays = ctx.opt = None
+        ctx.grid = ctx.rays = ctx.opt = None
         if not ctx.needs_input_grad[0]:
             grad_density_grid = None
         if not ctx.needs_input_grad[1]:
