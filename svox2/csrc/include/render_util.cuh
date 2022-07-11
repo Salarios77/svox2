@@ -68,24 +68,24 @@ __device__ __inline__ void trilerp_backward_one(
 
 
 // trilerp with links
-template<class data_type_t, class voxel_index_t>
-__device__ __inline__ float trilerp_cuvol_one(
+template<class data_type_t, class voxel_index_t, typename scalar_t>
+__device__ __inline__ scalar_t trilerp_cuvol_one(
         const int32_t* __restrict__ links,
         const data_type_t* __restrict__ data,
         int offx, int offy, size_t stride,
         const voxel_index_t* __restrict__ l,
-        const float* __restrict__ pos,
+        const scalar_t* __restrict__ pos,
         const int idx) {
     const int32_t* __restrict__ link_ptr = links + (offx * l[0] + offy * l[1] + l[2]);
 
 #define MAYBE_READ_LINK(u) ((link_ptr[u] >= 0) ? data[link_ptr[u] * stride + idx] : 0.f)
-    const float ix0y0 = lerp(MAYBE_READ_LINK(0), MAYBE_READ_LINK(1), pos[2]);
-    const float ix0y1 = lerp(MAYBE_READ_LINK(offy), MAYBE_READ_LINK(offy + 1), pos[2]);
-    const float ix0 = lerp(ix0y0, ix0y1, pos[1]);
-    const float ix1y0 = lerp(MAYBE_READ_LINK(offx), MAYBE_READ_LINK(offx + 1), pos[2]);
-    const float ix1y1 = lerp(MAYBE_READ_LINK(offy + offx),
+    const scalar_t ix0y0 = lerp(MAYBE_READ_LINK(0), MAYBE_READ_LINK(1), pos[2]);
+    const scalar_t ix0y1 = lerp(MAYBE_READ_LINK(offy), MAYBE_READ_LINK(offy + 1), pos[2]);
+    const scalar_t ix0 = lerp(ix0y0, ix0y1, pos[1]);
+    const scalar_t ix1y0 = lerp(MAYBE_READ_LINK(offx), MAYBE_READ_LINK(offx + 1), pos[2]);
+    const scalar_t ix1y1 = lerp(MAYBE_READ_LINK(offy + offx),
                              MAYBE_READ_LINK(offy + offx + 1), pos[2]);
-    const float ix1 = lerp(ix1y0, ix1y1, pos[1]);
+    const scalar_t ix1 = lerp(ix1y0, ix1y1, pos[1]);
     return lerp(ix0, ix1, pos[0]);
 #undef MAYBE_READ_LINK
 }
@@ -120,17 +120,17 @@ __device__ __inline__ void trilerp_backward_cuvol_one(
 #undef MAYBE_ADD_LINK
 }
 
-template<class data_type_t, class voxel_index_t>
+template<class data_type_t, class voxel_index_t, typename scalar_t>
 __device__ __inline__ void trilerp_backward_cuvol_one_density(
         const int32_t* __restrict__ links,
         data_type_t* __restrict__ grad_data_out,
         bool* __restrict__ mask_out,
         int offx, int offy,
         const voxel_index_t* __restrict__ l,
-        const float* __restrict__ pos,
-        float grad_out) {
-    const float ay = 1.f - pos[1], az = 1.f - pos[2];
-    float xo = (1.0f - pos[0]) * grad_out;
+        const scalar_t* __restrict__ pos,
+        scalar_t grad_out) {
+    const scalar_t ay = 1.f - pos[1], az = 1.f - pos[2];
+    scalar_t xo = (1.0f - pos[0]) * grad_out;
 
     const int32_t* __restrict__ link_ptr = links + (offx * l[0] + offy * l[1] + l[2]);
 
@@ -232,8 +232,9 @@ __device__ __inline__ void trilerp_backward_bg_one(
 }
 
 // Compute the amount to skip for negative link values
-__device__ __inline__ float compute_skip_dist(
-        SingleRaySpec& __restrict__ ray,
+template <typename scalar_t>
+__device__ __inline__ scalar_t compute_skip_dist(
+        SingleRaySpec_t<scalar_t>& __restrict__ ray,
         const int32_t* __restrict__ links,
         int offx, int offy,
         int pos_offset = 0) {
@@ -248,16 +249,16 @@ __device__ __inline__ float compute_skip_dist(
 
     // AABB intersection
     // Consider caching the invdir for the ray
-    float tmin = 0.f;
-    float tmax = 1e9f;
+    scalar_t tmin = 0.f;
+    scalar_t tmax = 1e9f;
 #pragma unroll
     for (int i = 0; i < 3; ++i) {
         int ul = (((ray.l[i] + pos_offset) >> cell_ul_shift) << cell_ul_shift);
         ul -= ray.l[i] + pos_offset;
 
-        const float invdir = 1.0 / ray.dir[i];
-        const float t1 = (ul - ray.pos[i] + pos_offset) * invdir;
-        const float t2 = (ul + cell_side_len - ray.pos[i] + pos_offset) * invdir;
+        const scalar_t invdir = 1.0 / ray.dir[i];
+        const scalar_t t1 = (ul - ray.pos[i] + pos_offset) * invdir;
+        const scalar_t t2 = (ul + cell_side_len - ray.pos[i] + pos_offset) * invdir;
         if (ray.dir[i] != 0.f) {
             tmin = max(tmin, min(t1, t2));
             tmax = min(tmax, max(t1, t2));
@@ -460,13 +461,14 @@ __device__ __inline__ float _intersect_aabb_unit(
     return tmax;
 }
 
-__device__ __inline__ float _get_delta_scale(
-    const float* __restrict__ scaling,
-    float* __restrict__ dir) {
+template <typename scalar_t>
+__device__ __inline__ scalar_t _get_delta_scale(
+    const scalar_t* __restrict__ scaling,
+    scalar_t* __restrict__ dir) {
     dir[0] *= scaling[0];
     dir[1] *= scaling[1];
     dir[2] *= scaling[2];
-    float delta_scale = _rnorm(dir);
+    scalar_t delta_scale = _rnorm(dir);
     dir[0] *= delta_scale;
     dir[1] *= delta_scale;
     dir[2] *= delta_scale;
@@ -543,11 +545,12 @@ __device__ __inline__ void cam2world_ray(
         world2ndc(cam, dir, origin);
 }
 
+template <typename scalar_t = float>
 struct ConcentricSpheresIntersector {
     __device__
         ConcentricSpheresIntersector(
-                const float* __restrict__ origin,
-                const float* __restrict__ dir)
+                const scalar_t* __restrict__ origin,
+                const scalar_t* __restrict__ dir)
     {
         q2a = 2 * _dot(dir, dir);
         qb = 2 * _dot(origin, dir);
@@ -556,28 +559,29 @@ struct ConcentricSpheresIntersector {
 
     // Get the far intersection, which we want for rendering MSI
     __device__
-    bool intersect(float r, float* __restrict__ out, bool near=false) {
-        float det = _det(r);
+    bool intersect(scalar_t r, scalar_t* __restrict__ out, bool near=false) {
+        scalar_t det = _det(r);
         if (det < 0) return false;
         if (near) {
-            *out = (-qb - sqrtf(det)) / q2a;
+            *out = (-qb - sqrt(det)) / q2a;
         } else {
-            *out = (-qb + sqrtf(det)) / q2a;
+            *out = (-qb + sqrt(det)) / q2a;
         }
         return true;
     }
 
     __device__ __host__
-    float _det (float r) {
+    scalar_t _det (scalar_t r) {
         return f + 2 * q2a * r * r;
     }
 
-    float q2a, qb, f;
+    scalar_t q2a, qb, f;
 };
 
+template <typename T>
 __device__ __inline__ void ray_find_bounds(
-        SingleRaySpec& __restrict__ ray,
-        const PackedSparseGridSpec& __restrict__ grid,
+        SingleRaySpec_t<T>& __restrict__ ray,
+        const PackedSparseGridSpec_t<T>& __restrict__ grid,
         const RenderOptions& __restrict__ opt,
         uint32_t ray_id) {
     // Warning: modifies ray.origin
@@ -587,12 +591,12 @@ __device__ __inline__ void ray_find_bounds(
 
     if (opt.use_spheric_clip) {
         // Horrible hack
-        const float sphere_scaling[3] {
-            2.f / float(grid.size[0]),
-            2.f / float(grid.size[1]),
-            2.f / float(grid.size[2])
+        const T sphere_scaling[3] {
+            2.f / T(grid.size[0]),
+            2.f / T(grid.size[1]),
+            2.f / T(grid.size[2])
         };
-        float sph_origin[3], sph_dir[3];
+        T sph_origin[3], sph_dir[3];
 
 #pragma unroll 3
         for (int i = 0; i < 3; ++i) {
@@ -600,7 +604,7 @@ __device__ __inline__ void ray_find_bounds(
             sph_dir[i] = ray.dir[i] * sphere_scaling[i];
         }
 
-        ConcentricSpheresIntersector csi(sph_origin, sph_dir);
+        ConcentricSpheresIntersector<T> csi(sph_origin, sph_dir);
         if (!csi.intersect(1.f, &ray.tmax) || !csi.intersect(1.f - opt.near_clip, &ray.tmin, true)) {
             ray.tmin = 1e-9f;
             ray.tmax = 0.f;
@@ -609,9 +613,9 @@ __device__ __inline__ void ray_find_bounds(
         ray.tmin = opt.near_clip / ray.world_step * opt.step_size;
         ray.tmax = 2e3f;
         for (int i = 0; i < 3; ++i) {
-            const float invdir = 1.0 / ray.dir[i];
-            const float t1 = (-0.5f - ray.origin[i]) * invdir;
-            const float t2 = (grid.size[i] - 0.5f  - ray.origin[i]) * invdir;
+            const T invdir = 1.0 / ray.dir[i];
+            const T t1 = (-0.5f - ray.origin[i]) * invdir;
+            const T t2 = (grid.size[i] - 0.5f  - ray.origin[i]) * invdir;
             if (ray.dir[i] != 0.f) {
                 ray.tmin = max(ray.tmin, min(t1, t2));
                 ray.tmax = min(ray.tmax, max(t1, t2));

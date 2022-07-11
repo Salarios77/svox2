@@ -58,9 +58,10 @@ __device__ inline void atomicMax(double* result, double value){
     return;
 }
 
-__device__ __inline__ void transform_coord(float* __restrict__ point,
-                                           const float* __restrict__ scaling,
-                                           const float* __restrict__ offset) {
+template <typename scalar_t>
+__device__ __inline__ void transform_coord(scalar_t* __restrict__ point,
+                                           const scalar_t* __restrict__ scaling,
+                                           const scalar_t* __restrict__ offset) {
     point[0] = fmaf(point[0], scaling[0], offset[0]); // a*b + c
     point[1] = fmaf(point[1], scaling[1], offset[1]); // a*b + c
     point[2] = fmaf(point[2], scaling[2], offset[2]); // a*b + c
@@ -80,10 +81,11 @@ __device__ __inline__ static float _norm(
     return norm3df(dir[0], dir[1], dir[2]);
 }
 
-__device__ __inline__ static float _rnorm(
-                const float* __restrict__ dir) {
+template <typename scalar_t>
+__device__ __inline__ static scalar_t _rnorm(
+                const scalar_t* __restrict__ dir) {
     // return 1.f / _norm(dir);
-    return rnorm3df(dir[0], dir[1], dir[2]);
+    return rnorm3d(dir[0], dir[1], dir[2]);
 }
 
 __host__ __device__ __inline__ static void xsuby3d(
@@ -94,9 +96,10 @@ __host__ __device__ __inline__ static void xsuby3d(
     x[2] -= y[2];
 }
 
-__host__ __device__ __inline__ static float _dot(
-                const float* __restrict__ x,
-                const float* __restrict__ y) {
+template <typename scalar_t>
+__host__ __device__ __inline__ static scalar_t _dot(
+                const scalar_t* __restrict__ x,
+                const scalar_t* __restrict__ y) {
     return x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
 }
 
