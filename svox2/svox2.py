@@ -1226,7 +1226,7 @@ class SparseGrid(nn.Module):
 
         :return: (N,)
         """
-
+        assert(not (use_kernel and sigma_thresh != None))
         if use_kernel and self.links.is_cuda and _C:
             return _DepthRenderFunction.apply(
                 self.density_data,
