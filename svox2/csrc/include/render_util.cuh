@@ -34,7 +34,7 @@ __device__ __inline__ float trilerp_one(
 }
 
 template<class data_type_t, class voxel_index_t>
-__device__ __inline__void trilerp_backward_pos(
+__device__ __inline__ void trilerp_backward_pos(
         const data_type_t* __restrict__ data,
         int reso, int stride,
         const voxel_index_t* __restrict__ l,
@@ -132,7 +132,7 @@ __device__ __inline__ float trilerp_cuvol_one(
 
 // trilerp with links
 template<class data_type_t, class voxel_index_t>
-__device__ __inline__void trilerp_backward_cuvol_pos(
+__device__ __inline__ void trilerp_backward_cuvol_pos(
         const int32_t* __restrict__ links,
         const data_type_t* __restrict__ data,
         int offx, int offy, size_t stride,
@@ -442,7 +442,7 @@ __device__ __inline__ void calc_sh(
 __device__ __inline__ void calc_sh_dir_backward(
     const int basis_dim,
     const float* __restrict__ dir,
-    float* __restrict__ grad_output) {
+    float** __restrict__ grad_output) {
 
     const float x = dir[0], y = dir[1], z = dir[2];
 
@@ -584,7 +584,7 @@ __device__ __inline__ void calc_sphfunc_dir_backward(
     const int lane_colorgrp_id,
     const float* __restrict__ dir, // Pre-normalized
     const float* __restrict__ output_saved,
-    float* __restrict__ grad_output) {
+    float** __restrict__ grad_output) {
     // Placeholder
     if (grid.basis_type == BASIS_TYPE_3D_TEXTURE) {
 
