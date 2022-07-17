@@ -45,7 +45,7 @@ __device__ __inline__ void trilerp_backward_pos(
     const int offz = stride;
     const int offy = reso * stride;
     const int offx = reso * offy;
-    data_type_t* __restrict__ data_ptr = data + (offx * l[0] +
+    const data_type_t* __restrict__ data_ptr = data + (offx * l[0] +
                                                     offy * l[1] +
                                                     offz * l[2]
                                                     + idx);
@@ -442,56 +442,56 @@ __device__ __inline__ void calc_sh(
 __device__ __inline__ void calc_sh_dir_backward(
     const int basis_dim,
     const float* __restrict__ dir,
-    float** __restrict__ grad_output) {
+    float* __restrict__ grad_output) {
 
     const float x = dir[0], y = dir[1], z = dir[2];
 
-    grad_output[0][0] = 0.f;
-    grad_output[0][1] = 0.f;
-    grad_output[0][2] = 0.f;
+    grad_output[0] = 0.f;
+    grad_output[1] = 0.f;
+    grad_output[2] = 0.f;
 
     switch (basis_dim) {
         case 9:
             // out[4] = C2[0] * xy
-            grad_output[4][0] = C2[0] * y;
-            grad_output[4][1] = C2[0] * x;
-            grad_output[4][2] = 0.f;
+            grad_output[4*3] = C2[0] * y;
+            grad_output[4*3 + 1] = C2[0] * x;
+            grad_output[4*3 + 2] = 0.f;
 
             // out[5] = C2[1] * yz
-            grad_output[5][0] = 0.f;
-            grad_output[5][1] = C2[1] * z;
-            grad_output[5][2] = C2[1] * y;
+            grad_output[5*3] = 0.f;
+            grad_output[5*3 + 1] = C2[1] * z;
+            grad_output[5*3 + 2] = C2[1] * y;
 
             // out[6] = C2[2] * (2.0 * zz - xx - yy)
-            grad_output[6][0] = -2.f * C2[2] * x;
-            grad_output[6][1] = -2.f * C2[2] * y;
-            grad_output[6][2] = 4.f * C2[2] * z;
+            grad_output[6*3] = -2.f * C2[2] * x;
+            grad_output[6*3 + 1] = -2.f * C2[2] * y;
+            grad_output[6*3 + 2] = 4.f * C2[2] * z;
 
             // out[7] = C2[3] * xz
-            grad_output[7][0] = C2[3] * z;
-            grad_output[7][1] = 0.f;
-            grad_output[7][2] = C2[3] * x;
+            grad_output[7*3] = C2[3] * z;
+            grad_output[7*3 + 1] = 0.f;
+            grad_output[7*3 + 2] = C2[3] * x;
 
             // out[8] = C2[4] * (xx - yy)
-            grad_output[8][0] = 2.f * C2[4] * x;
-            grad_output[8][1] = -2.f * C2[4] * y;
-            grad_output[8][2] = 0.f;
+            grad_output[8*3] = 2.f * C2[4] * x;
+            grad_output[8*3 + 1] = -2.f * C2[4] * y;
+            grad_output[8*3 + 2] = 0.f;
 
         case 4:
             // out[1] = -C1 * y
             // out[2] = C1 * z
             // out[3] = -C1 * x
-            grad_output[1][0] = 0.f;
-            grad_output[1][1] = -C1;
-            grad_output[1][2] = 0.f;
+            grad_output[1*3] = 0.f;
+            grad_output[1*3 + 1] = -C1;
+            grad_output[1*3 + 2] = 0.f;
 
-            grad_output[2][0] = 0.f;
-            grad_output[2][1] = 0.f;
-            grad_output[2][2] = C1;
+            grad_output[2*3] = 0.f;
+            grad_output[2*3 + 1] = 0.f;
+            grad_output[2*3 + 2] = C1;
 
-            grad_output[3][0] = -C1;
-            grad_output[3][1] = 0.f;
-            grad_output[3][2] = 0.f;
+            grad_output[3*3] = -C1;
+            grad_output[3*3 + 1] = 0.f;
+            grad_output[3*3 + 2] = 0.f;
     }
 }
 
@@ -584,7 +584,7 @@ __device__ __inline__ void calc_sphfunc_dir_backward(
     const int lane_colorgrp_id,
     const float* __restrict__ dir, // Pre-normalized
     const float* __restrict__ output_saved,
-    float** __restrict__ grad_output) {
+    float* __restrict__ grad_output) {
     // Placeholder
     if (grid.basis_type == BASIS_TYPE_3D_TEXTURE) {
 
@@ -610,7 +610,7 @@ __device__ __inline__ void calc_sphfunc_dir_backward(
 
             for (int j = 0; j < 3; ++j) {
                 grad_p[j] *= (grid.basis_reso - 1.f) * 0.5f;
-                grad_output[lane_colorgrp_id][j] = grad_p[j];
+                grad_output[lane_colorgrp_id*3 + j] = grad_p[j];
             }
         }
 

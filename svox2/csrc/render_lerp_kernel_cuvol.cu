@@ -493,7 +493,8 @@ __device__ __inline__ void trace_ray_ray_params_backward(
 
             float curr_grad_sh = lane_color * grad_common;
 
-            float dsh_ddir[9][3] = {};
+            // 9x3
+            float dsh_ddir[27] = {};
 
             const float vdir[3] = {ray.dir[0],
                                    ray.dir[1],
@@ -507,7 +508,7 @@ __device__ __inline__ void trace_ray_ray_params_backward(
                                     dsh_ddir);
 
             for (int j = 0; j < 3; ++j) {
-                curr_grad_dir[j] = curr_grad_color * dcolor_dx[j] * t + curr_grad_sh * dsh_ddir[lane_colorgrp_id][j] 
+                curr_grad_dir[j] = curr_grad_color * dcolor_dx[j] * t + curr_grad_sh * dsh_ddir[lane_colorgrp_id*3 + j] 
                                 + curr_grad_sigma * dsigma_dx[j] * t;
 
                 curr_grad_origin[j] = curr_grad_color * dcolor_dx[j] + curr_grad_sigma * dsigma_dx[j];
