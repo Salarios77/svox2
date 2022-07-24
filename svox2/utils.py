@@ -378,7 +378,7 @@ class ConcentricSpheresIntersector:
 
         origins = (rorigins + 0.5) * sphere_scaling - 1.0
         dirs = rdirs * sphere_scaling
-        inorm = 1.0 / dirs.norm(dim=-1)
+        inorm = 1.0 / torch.linalg.norm(dirs.clone(), dim=-1)
 
         self.world_step_scale = rworld_step * inorm
         dirs *= inorm.unsqueeze(-1)

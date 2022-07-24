@@ -702,7 +702,7 @@ class SparseGrid(nn.Module):
         assert origins.size(0) == B
         gsz = self._grid_size()
         dirs = dirs * (self._scaling * gsz).to(device=dirs.device)
-        delta_scale = 1.0 / dirs.norm(dim=1)
+        delta_scale = 1.0 / dirs.clone().norm(dim=1)
         dirs *= delta_scale.unsqueeze(-1)
 
         if self.basis_type == BASIS_TYPE_3D_TEXTURE:
@@ -711,7 +711,13 @@ class SparseGrid(nn.Module):
             sh_mult = torch.sigmoid(self._eval_basis_mlp(viewdirs))
         else:
             sh_mult = utils.eval_sh_bases(self.basis_dim, viewdirs)
-        invdirs = 1.0 / dirs
+
+        dirs_tmp = dirs.clone()
+        dirs_tmp[dirs == 0] = 1.0 #INSERTED to avoid nans. dirs==0 indices are addressed further below for t and tmax
+        invdirs = 1.0 / dirs_tmp
+        del dirs_tmp
+
+        #invdirs = 1.0 / dirs
 
         gsz = self._grid_size()
         gsz_cu = gsz.to(device=dirs.device)
@@ -747,18 +753,19 @@ class SparseGrid(nn.Module):
         tmax = tmax[mask]
 
         while good_indices.numel() > 0:
-            pos = origins + t[:, None] * dirs
-            pos = pos.clamp_min_(0.0)
-            pos[:, 0] = torch.clamp_max(pos[:, 0], gsz[0] - 1)
-            pos[:, 1] = torch.clamp_max(pos[:, 1], gsz[1] - 1)
-            pos[:, 2] = torch.clamp_max(pos[:, 2], gsz[2] - 1)
+            pos = origins + t.clone()[:, None] * dirs
+            pos = pos.clamp(min = 0.0)
+            pos = torch.stack([torch.clamp(pos[:, 0], max = gsz_cu[0] - 1),
+                            torch.clamp(pos[:, 1], max = gsz_cu[1] - 1),
+                            torch.clamp(pos[:, 2], max = gsz_cu[2] - 1)],
+                            dim=1)
             #  print('pym', pos, log_light_intensity)
 
             l = pos.to(torch.long)
-            l.clamp_min_(0)
-            l[:, 0] = torch.clamp_max(l[:, 0], gsz[0] - 2)
-            l[:, 1] = torch.clamp_max(l[:, 1], gsz[1] - 2)
-            l[:, 2] = torch.clamp_max(l[:, 2], gsz[2] - 2)
+            l.clamp(min = 0)
+            l[:, 0] = torch.clamp(l[:, 0], max = gsz_cu[0] - 2)
+            l[:, 1] = torch.clamp(l[:, 1], max = gsz_cu[1] - 2)
+            l[:, 2] = torch.clamp(l[:, 2], max = gsz_cu[2] - 2)
             pos -= l
 
             # BEGIN CRAZY TRILERP
@@ -864,7 +871,7 @@ class SparseGrid(nn.Module):
                 t_mid_sub = (t_sub + t_last[active_mask]) * 0.5
                 sphpos = csi.origins[active_mask] + \
                          t_mid_sub.unsqueeze(-1) * csi.dirs[active_mask]
-                invr_mid = 1.0 / torch.norm(sphpos, dim=-1)
+                invr_mid = 1.0 / torch.linalg.norm(sphpos.clone(), dim=-1)
                 sphpos *= invr_mid.unsqueeze(-1)
 
                 xy = utils.xyz2equirect(sphpos, self.background_links.size(1))
