@@ -289,14 +289,14 @@ class _RayRenderFunction(autograd.Function):
 
         grad_holder = _C.GridOutputGrads()
         grad_origins = torch.zeros_like(ctx.rays.origins.data)
-        grad_dirs = torch.zero_like(ctx.rays.dirs.data)
+        grad_dirs = torch.zeros_like(ctx.rays.dirs.data)
         ray_grad_holder = _C.RayOutputGrads()
         ray_grad_holder.grad_origin_out = grad_origins
         ray_grad_holder.grad_dir_out = grad_dirs
 
         ctx.rays.dirs = ctx.rays.dirs.contiguous()
         
-        _C._volume_render_ray_params_backward(
+        _C.volume_render_ray_params_backward(
             ctx.grid,
             ctx.rays,
             ctx.opt,
@@ -305,7 +305,8 @@ class _RayRenderFunction(autograd.Function):
             grad_holder,
             ray_grad_holder)
 
-        return grad_origins, grad_dirs, None, None, None
+        return None, None, None, None,\
+               None, ray_grad_holder, None
 
 
 

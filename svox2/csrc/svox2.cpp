@@ -178,4 +178,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readwrite("mask_out", &GridOutputGrads::mask_out)
       .def_readwrite("mask_background_out",
                      &GridOutputGrads::mask_background_out);
+    
+  py::class_<RayOutputGrads>(m, "RayOutputGrads")
+      .def(py::init<>())
+      .def_readwrite("grad_origin_out", &RayOutputGrads::grad_origin_out)
+      .def_readwrite("grad_dir_out", &RayOutputGrads::grad_dir_out);
 }
