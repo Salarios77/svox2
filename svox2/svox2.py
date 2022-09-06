@@ -267,6 +267,8 @@ class _RayRenderFunction(autograd.Function):
         data_sh: torch.Tensor,
         data_basis: torch.Tensor,
         data_background: torch.Tensor,
+        data_ray_origins: torch.Tensor,
+        data_ray_dirs: torch.Tensor,
         grid,
         rays,
         opt):
@@ -305,8 +307,8 @@ class _RayRenderFunction(autograd.Function):
             grad_holder,
             ray_grad_holder)
 
-        return None, None, None, None,\
-               None, ray_grad_holder, None
+        return None, None, None, None, grad_origins, grad_dirs, \
+               None, None, None
 
 
 
